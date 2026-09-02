@@ -92,6 +92,42 @@ Quando configurado no Antigravity IDE ou clientes MCP, o OmniRoute expõe as seg
 
 ---
 
+## 💻 Como Usar no Antigravity IDE
+
+### 1. Inicie o Gateway de Redundância (Terminal):
+```bash
+npm run start
+```
+> O gateway HTTP iniciará em background em `http://localhost:3000`.
+
+---
+
+### 2. No arquivo `mcp_config.json` do Antigravity:
+```json
+{
+  "mcpServers": {
+    "omniroute": {
+      "command": "npx",
+      "args": ["-y", "ts-node", "c:/Users/mduarte/projetos/omniroute/ominiroute/src/index.ts", "--mcp"],
+      "env": {
+        "OPENAI_API_KEY": "sua_chave_openai",
+        "GEMINI_API_KEY": "sua_chave_gemini",
+        "ANTHROPIC_API_KEY": "sua_chave_anthropic"
+      }
+    }
+  }
+}
+```
+
+---
+
+### 🎯 O que você ganha com essa configuração:
+- 🛡️ **Zero Downtime**: Se a OpenAI, Anthropic ou Google passarem por instabilidade ou esgotamento de taxa, o *failover* assume de forma imperceptível e resiliente.
+- 🧠 **Qualidade Máxima onde Importa**: Prompts complexos de arquitetura, algoritmos e segurança são direcionados automaticamente aos modelos mais poderosos (`claude-3-5-sonnet` / `gpt-4o` / `gemini-1.5-pro`), enquanto tarefas simples usam modelos ultra rápidos e econômicos.
+- 🤝 **Consenso Sob Demanda**: Você pode pedir diretamente ao assistente da IDE: *"Faça uma revisão por consenso deste algoritmo"*, e ele usará a ferramenta `omniroute_consensus_review` para cruzar as análises de dois modelos líderes.
+
+---
+
 ## ⚙️ Configuração do Ambiente
 
 1. Clone o repositório e instale as dependências:
@@ -117,7 +153,7 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 ---
 
-## 🚀 Como Executar
+## 🚀 Como Executar Localmente
 
 ### 1. Iniciar o Gateway HTTP (Modo Dev / Watch)
 ```bash
@@ -125,22 +161,9 @@ npm run dev
 ```
 > Disponível em `http://localhost:3000`.
 
-### 2. Iniciar o Servidor MCP (Stdio)
+### 2. Iniciar o Servidor MCP via Stdio
 ```bash
 npm run mcp
-```
-
-#### 🔌 Configuração no Antigravity IDE / Claude Desktop (`mcp_config.json`):
-```json
-{
-  "mcpServers": {
-    "omniroute": {
-      "command": "npx",
-      "args": ["-y", "tsx", "src/mcp.ts"],
-      "cwd": "C:/Users/mduarte/projetos/omniroute/ominiroute"
-    }
-  }
-}
 ```
 
 ### 3. Executar Testes via CLI
@@ -248,6 +271,7 @@ omniroute/
 ├── arquiteture.md                # Visão arquitetural do sistema
 ├── README.md                     # Guia principal de uso e integração
 └── src/
+    ├── index.ts                  # Ponto de entrada unificado (Exports & Runner)
     ├── cli.ts                    # Utilitário de linha de comando
     ├── mcp.ts                    # Entrypoint do Servidor MCP Stdio
     ├── providers/                # Adaptadores de Provedores de IA
@@ -261,15 +285,15 @@ omniroute/
     │   ├── classifier.ts         # Classificador Semântico de Complexidade
     │   ├── engine.ts             # Roteador sequencial base
     │   └── hybridEngine.ts       # Motor Híbrido com Consenso e Failover
+    ├── mcp/                      # Protocolo de Contexto de Modelo (MCP)
+    │   └── server.ts             # Definição e handlers do Servidor MCP
     ├── sdk/                      # SDK Cliente
     │   └── client.ts             # Cliente TypeScript OmniRouteClient
     └── server/                   # API Gateway HTTP
         ├── app.ts                # Inicializador do Gateway HTTP
         ├── gateway.ts            # Rotas Express e endpoints
-        ├── middlewares/
-        │   └── auth.ts           # Middleware de autenticação Bearer
-        └── mcp/
-            └── server.ts         # Definição e handlers do Servidor MCP
+        └── middlewares/
+            └── auth.ts           # Middleware de autenticação Bearer
 ```
 
 ---
