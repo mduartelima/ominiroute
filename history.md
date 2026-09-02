@@ -1,108 +1,119 @@
 # 📜 Histórico de Implementação — OmniRoute
 
-> Registro detalhado do desenvolvimento, decisões arquiteturais, evolução dos módulos e status técnico do projeto **OmniRoute**.
+> Registro detalhado do desenvolvimento, decisões arquiteturais, evolução dos módulos e status técnico do projeto **OmniRoute** (incluindo o **Cenário Híbrido v2.0**).
 
 ---
 
-## 1. 🎯 Visão Geral do Projeto
+## 1. 🎯 Visão Geral do Projeto & Evolução para o Cenário Híbrido
 
-O **OmniRoute** nasceu da necessidade de unificar o acesso a múltiplos modelos de linguagem de grande escala (LLMs) sob uma interface única, resiliente e compatível com os padrões de mercado (especialmente a especificação da API de Chat Completions da OpenAI).
+O **OmniRoute** nasceu da necessidade de unificar o acesso a múltiplos modelos de linguagem de grande escala (LLMs) sob uma interface única, resiliente e compatível com os padrões de mercado.
 
-### Principais Objetivos:
-- **Resiliência Máxima**: Roteamento com *failover* automático e transparente quando um provedor falha ou atinge limites de taxa (*rate limits*).
-- **Compatibilidade Padrão**: Suporte ao formato de entrada/saída `/v1/chat/completions` da OpenAI, facilitando a substituição de provedores sem alterar o código cliente.
-- **Transparência de Custos e Métricas**: Adição de metadados (`_omniroute_meta`) contendo provedor utilizado, tempo de resposta (latência em ms), consumo de tokens e custo estimado em USD.
-- **Desenvolvimento Modular**: Facilidade para plugar novos provedores (Anthropic, Ollama, Groq, Cohere, etc.) mantendo a mesma interface contratual.
+Na versão **v2.0 (Cenário Híbrido)**, o OmniRoute evoluiu para operar em uma arquitetura dual:
+1. **Servidor MCP (Model Context Protocol)**: Disponibiliza ferramentas especializadas para o **Agente Maestro (Antigravity IDE)** realizar consultas com classificação de complexidade, Consenso Híbrido (Code Review Cruzado e Segunda Opinião) e seleção de especialistas.
+2. **Proxy HTTP / API Gateway OpenAI Compatible (`:3000`)**: Roda em background provendo roteamento inteligente com *failover* em múltiplos tiers de modelos para qualquer aplicação cliente.
+3. **Classificador de Complexidade**: Analisa semântica e tamanho de contexto para despachar requisições para o tier de **Raciocínio Pesado (Top-Tier)** ou **Rápido/Econômico (Fast-Tier)**.
 
 ---
 
-## 2. 🏗️ Arquitetura e Padrões de Projeto
-
-A arquitetura do OmniRoute foi concebida seguindo princípios de alta coesão e baixo acoplamento:
+## 2. 🏗️ Arquitetura do Cenário Híbrido
 
 ```
-                  ┌─────────────────────────────────────────┐
-                  │              Cliente / SDK              │
-                  └────────────────────┬────────────────────┘
-                                       │ HTTP / REST
-                                       ▼
-                  ┌─────────────────────────────────────────┐
-                  │       API Gateway (Express Server)      │
-                  │  - Auth Middleware (Bearer Token)       │
-                  │  - CORS & JSON Parser                   │
-                  │  - POST /v1/chat/completions            │
-                  │  - GET /health                          │
-                  └────────────────────┬────────────────────┘
+                     ┌─────────────────────────────────────────┐
+                     │             Antigravity IDE             │
+                     │       🧠 Agente Antigravity - Maestro   │
+                     └─────────────┬─────────────────────┬─────┘
+                                   │                     │
+                     Via Protocolo │ MCP                 │ Via Proxy HTTP (:3000)
+                                   ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             OmniRoute Híbrido                               │
+│                                                                             │
+│  ┌────────────────────────────────────┐ ┌────────────────────────────────┐  │
+│  │ 🔌 Servidor MCP                    │ │ 🌐 Gateway HTTP (:3000)        │  │
+│  │  - omniroute_smart_chat            │ │  - POST /v1/chat/completions   │  │
+│  │  - omniroute_consensus_review      │ │  - POST /v1/consensus          │  │
+│  │  - omniroute_specialist_chat       │ │  - GET /health                 │  │
+│  └─────────────────┬──────────────────┘ └───────────────┬────────────────┘  │
+│                    │                                    │                   │
+│                    └─────────────────┬──────────────────┘                   │
+│                                      │                                      │
+│                                      ▼                                      │
+│                    ┌───────────────────────────────────┐                    │
+│                    │ 🔍 Classificador de Complexidade  │                    │
+│                    │  - Heurística & Keywords          │                    │
+│                    │  - Análise de Context Length      │                    │
+│                    └─────────────────┬─────────────────┘                    │
+│                                      │                                      │
+│                                      ▼                                      │
+│                    ┌───────────────────────────────────┐                    │
+│                    │ 🛡️ Hybrid Engine & Failover Chain │                    │
+│                    │  - Top-Tier / Fast-Tier / Offline │                    │
+│                    │  - Consenso Paralelo / Métricas   │                    │
+│                    └─────────────────┬─────────────────┘                    │
+└──────────────────────────────────────┼──────────────────────────────────────┘
                                        │
-                                       ▼
-                  ┌─────────────────────────────────────────┐
-                  │       OmniRouter (Router Engine)        │
-                  │  - Verificação de Disponibilidade       │
-                  │  - Execução Sequencial / Failover       │
-                  │  - Coleta de Latência e Erros           │
-                  └──────┬───────────────────────────┬──────┘
-                         │                           │
-                         ▼                           ▼
-            ┌────────────────────────┐  ┌────────────────────────┐
-            │  GeminiProvider        │  │  OpenAIProvider        │
-            │  (gemini-1.5-flash)    │  │  (gpt-4o-mini)         │
-            └────────────────────────┘  └────────────────────────┘
+         ┌─────────────────────────────┼─────────────────────────────┐
+         ▼                             ▼                             ▼
+┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────────────┐
+│ ⭐ Tier Raciocínio      │ │ ⚡ Tier Rápido          │ │ 💻 Tier Offline         │
+│   Pesado (Top-Tier)     │ │   Econômico (Fast-Tier) │ │   (Local)               │
+│ ----------------------- │ │ ----------------------- │ │ ----------------------- │
+│ • Claude 3.5 Sonnet     │ │ • Gemini 1.5 Flash      │ │ • Ollama (Llama-3)      │
+│ • OpenAI GPT-4o         │ │ • OpenAI GPT-4o-mini    │ │                         │
+│ • Gemini 1.5 Pro        │ │                         │ │                         │
+└─────────────────────────┘ └─────────────────────────┘ └─────────────────────────┘
 ```
-
-### Padrões de Projeto Aplicados:
-1. **Adapter Pattern**:
-   - Cada provedor (`OpenAIProvider`, `GeminiProvider`) implementa a interface comum `LLMProvider`, adaptando as peculiaridades de cada API proprietária (payloads, schemas de roles, headers de autenticação) para um formato padronizado.
-2. **Strategy / Chain of Responsibility (Engine)**:
-   - O `OmniRouter` itera sobre a cadeia de provedores configurados, verificando prontidão (`isAvailable()`) e executando a tentativa com tratamento de fallback automático em caso de erro.
-3. **Middleware Pattern**:
-   - Autenticação e validações desacopladas do controlador da rota (`apiKeyAuth`).
 
 ---
 
 ## 3. 🧩 Detalhamento dos Módulos Implementados
 
-### 3.1. Tipos e Contratos Base (`src/providers/base.ts`)
-Define as interfaces fundamentais do sistema:
-- `ChatMessage`: Estrutura padrão de mensagens (`role: 'system' | 'user' | 'assistant'`, `content: string`).
-- `CompletionRequest`: Payload de requisição unificado com parâmetros como `temperature`, `maxTokens`, `stream`.
-- `CompletionResponse`: Resposta unificada contendo id, modelo, provedor, conteúdo, estatísticas de tokens, custo em dólares e latência em milissegundos.
-- `LLMProvider`: Contrato obrigatório com métodos `isAvailable(): Promise<boolean>` e `complete(req: CompletionRequest): Promise<CompletionResponse>`.
+### 3.1. Provedores de IA (`src/providers/`)
+- **`src/providers/base.ts`**: Contrato unificado `LLMProvider`, `ChatMessage`, `CompletionRequest`, `CompletionResponse`.
+- **`src/providers/anthropic.ts`**: Adaptador para Anthropic Claude (`claude-3-5-sonnet-20241022`), adaptando payload e extraindo custos com taxas de input/output.
+- **`src/providers/openai.ts`**: Adaptador para OpenAI (`gpt-4o`, `gpt-4o-mini`) com suporte a Bearer token e precificação por token.
+- **`src/providers/gemini.ts`**: Adaptador para Google Gemini (`gemini-1.5-pro`, `gemini-1.5-flash`) via Google Generative AI REST API.
+- **`src/providers/ollama.ts`**: Adaptador para Ollama local (`llama3`), com checagem assíncrona de disponibilidade contra `/api/tags` e custo $0.00.
+- **`src/providers/factory.ts`**: Criação padronizada de pools `topTier`, `fastTier` e `offlineTier`.
 
-### 3.2. Adaptadores de Provedores (`src/providers/`)
-- **Google Gemini (`src/providers/gemini.ts`)**:
-  - Utiliza o endpoint nativo `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`.
-  - Mapeia papéis (`roles`) para a convenção do Gemini (`assistant` -> `model`, `user` -> `user`).
-  - Extrai estatísticas de `usageMetadata` e calcula custo estimado baseado na precificação por token do modelo `gemini-1.5-flash`.
-- **OpenAI (`src/providers/openai.ts`)**:
-  - Utiliza o endpoint oficial `https://api.openai.com/v1/chat/completions`.
-  - Envia autenticação via `Bearer token` e captura tokens de prompt e completion para cálculo financeiro (`gpt-4o-mini`).
+### 3.2. Classificador de Complexidade (`src/router/classifier.ts`)
+- Avalia termos críticos de engenharia de software (arquitetura, concorrência, deadlocks, memory leaks, segurança, otimização SQL, design patterns).
+- Analisa o tamanho do prompt (> 1500 caracteres).
+- Classifica em `TOP_REASONING` ou `FAST_ECONOMY` com metadados explicativos.
 
-### 3.3. Motor de Roteamento e Failover (`src/router/engine.ts`)
-- Classe `OmniRouter`:
-  - Recebe um array ordenado de instâncias de `LLMProvider`.
-  - Testa `provider.isAvailable()` antes de disparar a requisição (evita chamadas desnecessárias se chaves não estiverem configuradas).
-  - Em caso de falha em tempo de execução (erro de rede, status 4xx/5xx, quota excedida), registra o log do erro e passa imediatamente para o próximo provedor.
-  - Lança erro detalhado apenas se **todos** os provedores falharem.
+### 3.3. Motor Híbrido & Consenso (`src/router/hybridEngine.ts`)
+- **`executeSmartRoute`**:
+  1. Identifica o Tier ideal.
+  2. Tenta os provedores do Tier primário.
+  3. Em caso de indisponibilidade ou erro, aciona o Tier de backup e finalmente o Tier offline.
+  4. Retorna resposta com `routingMetadata` completo (tentativas, failover ocorrido, tier).
+- **`getConsensusReview`**:
+  1. Filtra os modelos Top-Tier disponíveis.
+  2. Dispara requisições simultâneas via `Promise.all`.
+  3. Retorna análise cruzada com métricas consolidadas de latência e custo.
+- **`executeWithSpecialist`**:
+  1. Roteia diretamente para o modelo/provedor solicitado.
 
-### 3.4. API Gateway HTTP (`src/server/app.ts`)
-- Servidor baseado em Express com middleware de CORS e JSON.
-- **`GET /health`**: Endpoint para verificação de integridade e prontidão do gateway.
-- **`POST /v1/chat/completions`**:
-  - Valida o payload de entrada.
-  - Roteia via `OmniRouter`.
-  - Formata a saída no padrão OpenAI JSON com inclusão do bloco `_omniroute_meta` para auditoria e métricas.
+### 3.4. Servidor MCP (`src/server/mcp/server.ts` & `src/mcp.ts`)
+- Integração oficial via `@modelcontextprotocol/sdk` com transporte `StdioServerTransport`.
+- Ferramentas expostas:
+  - `omniroute_smart_chat`: Consulta com despacho inteligente e proteção contra quedas.
+  - `omniroute_consensus_review`: Revisão cruzada entre 2 modelos Top-Tier para validação profunda.
+  - `omniroute_specialist_chat`: Consulta direcionada a um modelo específico.
 
-### 3.5. Middleware de Segurança (`src/server/middlewares/auth.ts`)
-- Valida o header `Authorization: Bearer <OMNIROUTE_API_KEY>`.
-- Permite acesso aberto se `OMNIROUTE_API_KEY` não for configurada no ambiente (ideal para desenvolvimento local simplificado).
+### 3.5. Gateway HTTP & API REST (`src/server/gateway.ts` & `src/server/app.ts`)
+- Express HTTP Gateway na porta `3000`.
+- Endpoints:
+  - `GET /health`: Healthcheck do gateway e modo operacional.
+  - `POST /v1/chat/completions`: Formato padrão OpenAI + telemetria no bloco `_omniroute_meta`.
+  - `POST /v1/consensus`: Endpoint REST para revisão de consenso.
+- Middleware `apiKeyAuth` para autenticação Bearer.
 
-### 3.6. SDK Cliente (`src/sdk/client.ts`)
-- Classe `OmniRouteClient`:
-  - Fornece método conciso `chat(prompt: string): Promise<string>`.
-  - Configuração simples com `baseUrl` e `apiKey`.
-
-### 3.7. Utilitário de Linha de Comando (`src/cli.ts`)
-- Permite testar o roteador e visualizar o comportamento de failover diretamente pelo terminal, exibindo tempos de resposta, custo e provedor vencedor.
+### 3.6. CLI & Benchmark (`src/cli.ts`)
+- Suporte a comandos:
+  - `npm run cli "<prompt>"`: Roteamento inteligente padrão.
+  - `npm run cli -- --consensus "<prompt>"`: Benchmark de consenso cruzado.
+  - `npm run cli -- --specialist claude "<prompt>"`: Teste de especialista.
 
 ---
 
@@ -110,32 +121,30 @@ Define as interfaces fundamentais do sistema:
 
 | Decisão | Escolha | Motivação |
 | :--- | :--- | :--- |
-| **Runtime & Linguagem** | Node.js / TypeScript | Tipagem estática rigorosa para payloads de LLM e ecossistema maduro para APIs. |
-| **Execução em Dev** | `tsx` | Compilação e execução instantânea sem necessidade de build intermediário em desenvolvimento. |
-| **Padrão de API** | OpenAI Compatible | Máxima compatibilidade com bibliotecas existentes (LangChain, LlamaIndex, OpenAI SDK). |
-| **Tratamento de Falhas** | Failover Sequencial Gracioso | Garantia de alta disponibilidade da aplicação final sem downtime para o usuário. |
-| **Cálculo de Custos** | Inline no Adaptador | Estimativa instantânea de custos operacionais por requisição. |
+| **Integração IDE / Agente** | Model Context Protocol (MCP) via Stdio | Padrão aberto da indústria, suportado nativamente pelo Antigravity IDE e Claude. |
+| **Classificação de Complexidade** | Heurística Semântica + Tamanho | Sem sobrecarga de latência adicional (0ms) antes do despacho para o modelo ideal. |
+| **Consenso Híbrido** | Execução Paralela (`Promise.all`) | Minimiza tempo de espera ao buscar simultaneamente a opinião de múltiplos Top-Tiers. |
+| **Tier Offline (Ollama)** | Fallback Final com Detecção de Daemon | Garante continuidade operacional mesmo em caso de perda total de conectividade com a nuvem. |
+| **Padronização OpenAI** | Formato `/v1/chat/completions` | Compatibilidade plug-and-play com ferramentas, SDKs e extensões existentes. |
 
 ---
 
-## 5. 🗺️ Status Atual e Próximas Etapas
+## 5. 🗺️ Status Atual do Projeto
 
 ```
-[CONCLUÍDO]
+[CONCLUÍDO - v2.0 HÍBRIDO]
 ├── ✅ Setup TypeScript + tsx + npm scripts
 ├── ✅ Interfaces de Provedores (LLMProvider)
-├── ✅ Adaptador Google Gemini (gemini-1.5-flash)
-├── ✅ Adaptador OpenAI (gpt-4o-mini)
-├── ✅ Motor OmniRouter com Failover Automático
-├── ✅ Gateway HTTP Express (/health, /v1/chat/completions)
+├── ✅ Adaptador Anthropic Claude (Claude 3.5 Sonnet)
+├── ✅ Adaptador OpenAI (GPT-4o, GPT-4o-mini)
+├── ✅ Adaptador Google Gemini (Gemini 1.5 Pro, Gemini 1.5 Flash)
+├── ✅ Adaptador Ollama (Llama-3 Local / Offline)
+├── ✅ Classificador de Complexidade (classifier.ts)
+├── ✅ Motor HybridEngine com Multi-Tier Failover
+├── ✅ Consenso Híbrido Paralelo (getConsensusReview)
+├── ✅ Servidor MCP Stdio (omniroute_smart_chat, omniroute_consensus_review, omniroute_specialist_chat)
+├── ✅ Gateway HTTP Express (/health, /v1/chat/completions, /v1/consensus)
 ├── ✅ Middleware de Autenticação (Bearer token)
 ├── ✅ SDK TypeScript (OmniRouteClient)
-└── ✅ CLI de Testes e Benchmark
-
-[PLANEJADO / PRÓXIMAS FASES]
-├── 🔄 Suporte a Streaming SSE (Server-Sent Events)
-├── 🔄 Provedores Anthropic Claude e Ollama (Local)
-├── 🔄 Módulo de Rate Limiting por IP/Token
-├── 🔄 Roteamento Dinâmico por Custo / Latência (costCalculator)
-└── 🔄 Arquivo de configuração global omniroute.config.json
+└── ✅ CLI Interativo com suporte a Consenso e Especialistas
 ```

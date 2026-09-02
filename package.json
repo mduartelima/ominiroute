@@ -1,18 +1,30 @@
 {
   "name": "omniroute",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "2.0.0",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/server/app.ts",
     "start": "tsx src/server/app.ts",
+    "mcp": "tsx src/mcp.ts",
     "build": "tsc",
     "cli": "tsx src/cli.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "llm",
+    "gateway",
+    "router",
+    "failover",
+    "openai",
+    "claude",
+    "gemini",
+    "ollama",
+    "mcp",
+    "modelcontextprotocol"
+  ],
+  "author": "mduartelima",
   "license": "ISC",
-  "description": "",
+  "description": "Intelligent LLM Gateway & Router with Complexity Classification, Multi-Tier Failover, and Model Context Protocol (MCP) Server",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "cors": "^2.8.6",
